@@ -1,9 +1,12 @@
 FROM alpine:3
 RUN apk update && apk upgrade
-RUN apk add tinc expect
+RUN apk add tinc expect gcc python3 python3-dev musl-dev libffi-dev py3-pip git
 
 RUN mkdir -p /opt/tincd/
-COPY entrypoint.sh /opt/tincd/
+COPY *.py *.txt *.sh /opt/tincd/
+
+RUN pip3 install pip --upgrade
+RUN pip3 install -r /opt/tincd/requirements.txt
 
 VOLUME [ "/config" ]
 EXPOSE 655/tcp 655/udp
