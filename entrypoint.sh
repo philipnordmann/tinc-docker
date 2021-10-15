@@ -5,51 +5,68 @@ function main (){
     
     mkdir -p /dev/net
     mknod -m 666 /dev/net/tun c 10 200
+
+    update_conf
+#     restart_tincd
     
-    /usr/sbin/tincd --config=/config --no-detach
+    TINC_PID="$(cat /tmp/tinc.pid)"
+    while ps -p ${TINC_PID} > /dev/null; do
+        update_conf
+        TINC_PID="$(cat /tmp/tinc.pid)"
+        sleep 10
+    done
+
 }
 
-function genconf (){
-    
+function restart_tincd () {
+    if [ -f /tmp/tinc.pid ]; then  
+        /usr/sbin/tincd -k
+        TINC_PID="$(cat /tmp/tinc.pid)"
+        ps -p ${TINC_PID} > /dev/null
+        PID_RUNNING="${?}"
+        i=0
+        while [[ "${PID_RUNNING}" == "0" && "${i}" -lt "60" ]]; do
+            i=$((i + 1))
+            sleep 1
+            ps -p ${TINC_PID} > /dev/null
+            PID_RUNNING="${?}"
+        done
+    fi
+    /usr/sbin/tincd --config=/config --no-detach &
+    printf "$!" > /tmp/tinc.pid
 }
 
-if [ "${PEERS}" == "" ]; then
-    echo "PEERS not set, using default of 1"
-    PEERS=1
-fi
+function update_conf () {
+    UPDATED=false
+    start=$PWD
+    cd /opt/tincd/git/
+    if [ -d .git ]; then
+        git remote update
+        git status -uno | grep -q "Your branch is behind"
+        if [ "${?}" == "0" ]; then
+            UPDATED=true
+            git pull
+        fi
+    else
+        git clone https://${GIT_USERNAME}:${GIT_TOKEN}@${GIT_REPOSITORY} .
+        UPDATED=true
+    fi
+    cd ${start}
 
-if [ "${PEERS}" -gt "253" ]; then
-    echo "peers set to ${PEERS} that is greater than 253, please define something smaller than 253"
-    echo "setting peers to 1"
-    PEERS=1
-fi
+    if [ "${UPDATED}" == "true" ]; then
+        /opt/tincd/genconf.py --config /opt/tincd/git/config.yml --name ${TINC_NAME} --configure /config --templates /opt/tincd/git/templates
+        restart_tincd
+    fi
+}
 
-if [ "${TINC_SUBNET}" == "" ]; then
-    TINC_SUBNET="192.168.222.0/24"
-    echo "TINC_SUBNET not set using default of ${TINC_SUBNET}"
-fi
-
-TINC_NETMASK="${TINC_SUBNET#*/}"
-TINC_SUBNET_PRE="${TINC_SUBNET%.*}"
-TINC_SERVER_IP="${TINC_SUBNET_PRE}.1/32"
-
-if [ "${TINC_SERVER_NAME}" == "" ]; then
-    TINC_SERVER_NAME="dockerserver"
-    echo "TINC_SERVER_NAME not set using default of ${TINC_SERVER_NAME}"
+if [ "${TINC_NAME}" == "" ]; then
+    echo "\${TINC_NAME} not set"
+    exit 1
 fi
 
 if [ "${1}" == "" ]; then
-    if [ "$(ls -A /config)" == "" ]; then
-        echo "directory /config is empty, generating config with ${PEERS} peers"
-        genconf
-    fi
     main
-
-elif [ "${1}" == "genconf" ]; then
-    genconf
-
 else
     /usr/sbin/tincd ${@}
-
 fi
 

@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python3
 from argparse import ArgumentParser
 from jinja2 import FileSystemLoader, Environment
 from jinja2.utils import select_autoescape
@@ -36,6 +36,12 @@ def generate_config(name: str, clients: list, default_config: dict) -> None:
         global free_addresses
         client['ip'] = str(free_addresses.pop())
     
+    if 'connect_to' not in client.keys():
+        for key in clients.keys():
+            if 'is_server' in clients[key] and clients[key]['is_server']:
+                client['connect_to'] = key
+                break
+
     if 'private_key' not in client.keys():
         private_key = rsa.generate_private_key(
             public_exponent=65537,
@@ -57,11 +63,7 @@ def generate_config(name: str, clients: list, default_config: dict) -> None:
     return clients
 
 def configure(name: str, clients: dict, default_config: dict, base_path: str, templates_path: str) -> None:
-    network = IPv4Network(default_config['subnet'])
-    netmask = network.prefixlen
-
     path = f'{base_path}'
-
     os.makedirs(path + '/hosts', exist_ok=True)
 
     loader = FileSystemLoader(templates_path)
@@ -70,13 +72,13 @@ def configure(name: str, clients: dict, default_config: dict, base_path: str, te
     for template_name, mode in templates:
         template = env.get_template(template_name + '.j2')
         with open(path + '/' + template_name, 'w') as jinja_file:
-            jinja_file.write(template.render(name=name, client=clients[name], subnet=default_config['subnet'], netmask=netmask))
+            jinja_file.write(template.render(name=name, client=clients[name], subnet=default_config['subnet']))
         os.chmod(path + '/' + template_name, mode)
     
     for client in clients.keys():
         template = env.get_template('client.j2')
         with open(path + f'/hosts/{client}', 'w') as jinja_file:
-            jinja_file.write(template.render(name=client, client=clients[client], subnet=default_config['subnet'], netmask=netmask))
+            jinja_file.write(template.render(name=client, client=clients[client], subnet=default_config['subnet']))
 
 def get_config(path) -> list:
     with open(path) as file:
@@ -110,7 +112,7 @@ def main() -> None:
     client_ips = [ IPv4Address(clients[c]['ip']) for c in clients.keys() if clients[c] and 'ip' in clients[c].keys() ]
     free_addresses = list(set(network.hosts()) - set(client_ips))
 
-    if args.generate or args.configure:
+    if args.generate:
         clients = generate_config(name, clients, default_config)
         save_config({'default': default_config, 'clients': clients}, config_path)
         
