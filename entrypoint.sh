@@ -6,8 +6,7 @@ function main (){
     mkdir -p /dev/net
     mknod -m 666 /dev/net/tun c 10 200
 
-    update_conf
-#     restart_tincd
+    update_conf firststart
     
     TINC_PID="$(cat /tmp/tinc.pid)"
     while ps -p ${TINC_PID} > /dev/null; do
@@ -37,7 +36,11 @@ function restart_tincd () {
 }
 
 function update_conf () {
-    UPDATED=false
+    if [ "${1}" == "firststart" ]; then
+        UPDATED=true
+    else
+        UPDATED=false
+    fi
     start=$PWD
     cd /opt/tincd/git/
     if [ -d .git ]; then
