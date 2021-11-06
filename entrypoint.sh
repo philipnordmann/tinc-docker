@@ -12,7 +12,7 @@ function main (){
     while ps -p ${TINC_PID} > /dev/null; do
         update_conf
         TINC_PID="$(cat /tmp/tinc.pid)"
-        sleep 10
+        sleep 30
     done
 
 }

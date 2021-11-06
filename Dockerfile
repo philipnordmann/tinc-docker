@@ -1,6 +1,6 @@
-FROM alpine:3
+FROM alpine:3.12
 RUN apk update && apk upgrade
-RUN apk add tinc expect gcc python3 python3-dev musl-dev libffi-dev py3-pip git procps
+RUN apk add tinc python3 python3-dev py3-pip git
 RUN pip3 install pip --upgrade
 RUN mkdir -p /opt/tincd/git
 
